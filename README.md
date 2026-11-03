@@ -1,11 +1,27 @@
 # webprobe
 
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 A modular, **non-destructive** web application security scanner written in Python
 (async `httpx`, `rich` output). It ships with **ShopLab**, a deliberately vulnerable local
 app you can practise on and that the test suite scans end-to-end.
 
+![webprobe scanning the bundled ShopLab target](docs/demo.svg)
+
+**Sample output:** [Markdown report](docs/sample-report.md) · [HTML report](docs/sample-report.html) (download and open in a browser)
+
 > **Legal:** only scan systems you own or have explicit written permission to test.
 > Unauthorised scanning is illegal in most countries, even when the checks are harmless.
+
+## Highlights
+
+- **Async scanning engine:** `asyncio` + `httpx` with bounded concurrency and an optional rate limiter; 160+ requests in about a second against a local target.
+- **Scope enforced at the HTTP layer:** every request is checked against the target origin, and off-host redirects abort the scan.
+- **False-positive control built in:** soft-404 fingerprinting with text similarity, content-signature checks for exposed files, baseline diffing and balanced-quote confirmation for SQL errors, context-aware (HTML / attribute / script) analysis for reflected input.
+- **Plugin-style checks:** each check is one small class; adding one means writing a class and adding it to the registry.
+- **Tested end-to-end** against a purpose-built vulnerable app, including negative controls (a correctly escaped page and a soft-404 server must stay clean). CI runs on Python 3.10–3.14.
+- **Reports for real engagements:** HTML (filterable by severity), Markdown for write-ups, JSON for pipelines, and `--fail-on` for CI gating.
 
 ## What it checks
 

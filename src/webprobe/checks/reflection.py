@@ -67,11 +67,11 @@ class ReflectedInputCheck(Check):
             if is_exploitable(context, survived):
                 chars = " ".join(sorted(survived))
                 return self.finding(
-                    f"Reflected input not encoded in '{point.name}' (possible XSS)", Severity.MEDIUM, url,
+                    f"Reflected input not encoded in '{point.name}' (possible XSS)", Severity.MEDIUM, point.url,
                     f"The value of parameter '{point.name}' is reflected into the page ({context} context) and the "
                     f"characters {chars} come back unencoded. That usually means script can be injected; confirm "
                     "manually with a context-appropriate payload.",
-                    evidence=f"Injected: {start}{PROBE}{end}\nContext: {context}\nUnencoded: {chars}",
+                    evidence=f"Request: {url}\nInjected: {start}{PROBE}{end}\nContext: {context}\nUnencoded: {chars}",
                     remediation="HTML-encode output for the context it lands in (use the template engine's auto-escaping) "
                                 "and add a strict Content-Security-Policy as defence in depth.",
                     references=["https://owasp.org/www-community/attacks/xss/",
