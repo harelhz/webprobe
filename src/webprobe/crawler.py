@@ -129,10 +129,19 @@ class Crawler:
         path = url.path.lower()
         if any(path.endswith(ext) for ext in SKIP_EXTENSIONS):
             return None
-        if UNSAFE_LINK_RE.search(path):
+        if self._unsafe(url):
             result.skipped_unsafe.append(str(url))
             return None
         return url
+
+    @staticmethod
+    def _unsafe(url: httpx.URL) -> bool:
+        # Routers often put the action in the query string (?action=logout,
+        # ?op=delete, ?logout=1), so check parameter names and values too.
+        parts = [url.path]
+        for name, value in url.params.multi_items():
+            parts += (name, value)
+        return any(UNSAFE_LINK_RE.search(part) for part in parts)
 
     @staticmethod
     def _signature(url: httpx.URL) -> tuple[str, frozenset[str]]:
