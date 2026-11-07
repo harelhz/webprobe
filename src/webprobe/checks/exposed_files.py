@@ -12,6 +12,13 @@ from webprobe.models import Finding, Severity
 MAX_BYTES = 64_000
 SECRET_WORDS = rb"(?i)(pass(word)?|secret|token|api_?key|private_?key|aws_|database_url|dsn)"
 REDACT_RE = re.compile(r"(?i)((?:pass|secret|token|key|pwd|auth|dsn|url)[^\n=:]{0,30}[=:]\s*[\"']?)([^\s\"']{1,3})[^\s\"']*")
+# define('DB_PASSWORD', '...') / define('AUTH_KEY', '...') in wp-config.php
+DEFINE_RE = re.compile(r"(?i)(define\s*\(\s*([\"'])\w*(?:pass|secret|token|key|salt)\w*\2\s*,\s*([\"']))([^\"']{1,3})[^\"']*")
+# Whole PEM/OpenSSH private key blocks, END marker optional (the body may be truncated).
+PRIVATE_KEY_RE = re.compile(r"(-----BEGIN ((?:[A-Z0-9]+ )*)PRIVATE KEY-----)(.*?)(?:(-----END \2PRIVATE KEY-----)|\Z)", re.S)
+HTPASSWD_SIG = rb"(?m)^[^:\s]+:(?:\$apr1\$|\$2[aby]\$|\{SHA\}|\$[156]\$)"
+# user:hash -> keep the user and the hash scheme, drop the hash itself
+HTPASSWD_LINE_RE = re.compile(r"^([^:\s]+:)(\$apr1\$|\$2[aby]\$|\{SHA\}|\$[156]\$)?\S+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +55,7 @@ SENSITIVE_PATHS = [
     _sp("id_rsa .ssh/id_rsa id_ed25519", "Private SSH key exposed", Severity.CRITICAL,
         rb"-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----", "A private SSH key is publicly downloadable."),
     _sp(".htpasswd", "htpasswd file exposed", Severity.HIGH,
-        rb"(?m)^[^:\s]+:(?:\$apr1\$|\$2[aby]\$|\{SHA\}|\$[156]\$)", "Password hashes for HTTP basic auth are downloadable and can be cracked offline."),
+        HTPASSWD_SIG, "Password hashes for HTTP basic auth are downloadable and can be cracked offline."),
     _sp(".npmrc", "npm credentials exposed", Severity.HIGH, rb"_auth(?:Token)?\s*=",
         "An .npmrc with registry auth tokens is publicly readable."),
     _sp(".vscode/sftp.json", "Editor SFTP config exposed", Severity.HIGH, rb"\"(?:password|privateKeyPath)\"",
@@ -80,12 +87,25 @@ SENSITIVE_PATHS = [
 ]
 
 
+def _redact_private_key(match: re.Match[str]) -> str:
+    begin, _, key_body, end = match.groups()
+    size = len(key_body.strip().encode())
+    return f"{begin}\n[{size} bytes of key material redacted]\n{end or '(no END marker in the downloaded part)'}"
+
+
 def evidence_from(body: bytes) -> str:
     head = body[:512]
     if b"\x00" in head:
         return f"{len(body)}+ bytes, starts with {body[:8]!r}"
-    lines = body.decode("utf-8", errors="replace").splitlines()[:6]
-    return "\n".join(REDACT_RE.sub(r"\1\2****", line)[:160] for line in lines)
+    text = PRIVATE_KEY_RE.sub(_redact_private_key, body.decode("utf-8", errors="replace"))
+    htpasswd = re.search(HTPASSWD_SIG, body) is not None
+    out = []
+    for line in text.splitlines()[:6]:
+        if htpasswd:
+            line = HTPASSWD_LINE_RE.sub(r"\1\2****", line)
+        line = DEFINE_RE.sub(r"\1\4****", line)
+        out.append(REDACT_RE.sub(r"\1\2****", line)[:160])
+    return "\n".join(out)
 
 
 class ExposedFilesCheck(Check):

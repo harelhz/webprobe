@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from webprobe import __version__
@@ -142,16 +143,18 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:  # bad check ids etc.
         parser.error(str(exc))
     except ScanError as exc:
-        status_console.print(f"[red]error:[/] {exc}")
+        status_console.print(f"[red]error:[/] {escape(str(exc))}")
         return 2
     except KeyboardInterrupt:
         status_console.print("[yellow]interrupted[/]")
         return 130
 
-    render(result, console, verbose=args.verbose)
+    # Reports first: a problem printing to the terminal must not cost the user the report files.
     for path in args.output:
         write_report(result, path)
-        status_console.print(f"[green]report written:[/] {path}")
+    render(result, console, verbose=args.verbose)
+    for path in args.output:
+        status_console.print(f"[green]report written:[/] {escape(str(path))}")
 
     if args.fail_on is not None and any(f.severity >= args.fail_on for f in result.findings):
         return 1

@@ -1,4 +1,9 @@
-"""Terminal output using rich."""
+"""Terminal output using rich.
+
+Everything that comes from the scan (target, titles, URLs, evidence, errors) is
+passed to rich as Text, never as a markup string: URLs like ?filter[status]=x
+and messages like "[tls] ..." would otherwise be eaten as tags or raise MarkupError.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +34,7 @@ def render(result: ScanResult, console: Console, *, verbose: bool = False) -> No
     summary.add_row(*(Text(str(counts[s]), justify="center") for s in reversed(Severity)))
     console.print(Panel(
         summary,
-        title=f"[bold]webprobe[/] - {result.target}",
+        title=Text.assemble(("webprobe", "bold"), " - ", result.target),
         subtitle=f"{result.pages_crawled} pages, {result.requests_sent} requests, {result.duration:.1f}s",
         expand=False,
     ))
@@ -42,7 +47,7 @@ def render(result: ScanResult, console: Console, *, verbose: bool = False) -> No
         table.add_column("Finding")
         table.add_column("URL", overflow="fold", style="dim")
         for finding in result.findings:
-            table.add_row(severity_text(finding.severity), finding.title, finding.url)
+            table.add_row(severity_text(finding.severity), Text(finding.title), Text(finding.url))
         console.print(table)
 
     if verbose:
@@ -56,7 +61,7 @@ def render(result: ScanResult, console: Console, *, verbose: bool = False) -> No
                 body.append("\nFix\n", style="bold")
                 body.append(finding.remediation + "\n")
             console.print(Panel(body, title=Text.assemble(severity_text(finding.severity), " ", finding.title),
-                                subtitle=finding.url, title_align="left"))
+                                subtitle=Text(finding.url), title_align="left"))
 
     for error in result.errors:
-        console.print(f"[yellow]warning:[/] {error}")
+        console.print(Text.assemble(("warning:", "yellow"), " ", error))
